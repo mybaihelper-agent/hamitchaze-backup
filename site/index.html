@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"><script data-tab-autoupd data-b="a3f637e0efee" data-v="1.0.4" data-sw="/sw.js">/* Tab auto-update v1 (2026-11-06). Inlined first in <head> by autoupd_patch.py; data-b = build id, data-v = version.
+   Checks /__upd.json (no-store) on load, every 10 min while visible, on 'online' and on return to the foreground.
+   A newer build is applied with no tap, only at a safe moment: at app open (before the first touch/key, first 20 s),
+   or on a menu / game-over screen while idle 3 s and with no live online session (RTCPeerConnection, WebSocket,
+   or /api/ traffic in the last 45 s). Otherwise it waits for the next app open.
+   Applying = registration.update() + SKIP_WAITING to the new worker, then a reload; if the worker still serves the old
+   page, Cache Storage is cleared and the worker unregistered first. localStorage / IndexedDB (saves) are never touched.
+   If no service worker is registered for / (some games register only on https), it registers data-sw itself.
+   Games can steer it: window.tabSafeToUpdate = () => bool (menu?), window.tabBusy = () => bool (mid-online?). */
+(()=>{if(window.TabAutoUpdate)return;
+const d=document,N=navigator,S=d.currentScript,D=S?S.dataset:{},B=D.b||"",V=D.v||"",PERIOD=+(D.period||6e5),T0=Date.now();
+let lastIn=0,nIn=0,pend=null,busy=false,lastChk=0,timer=0,hiddenAt=0,applied=false;
+const live=new Set();let apiAt=0;
+const wrap=n=>{try{const P=window[n];if(!P)return;class W extends P{constructor(...a){super(...a);try{live.add(this)}catch(e){}}}window[n]=W}catch(e){}};
+wrap("RTCPeerConnection");wrap("webkitRTCPeerConnection");wrap("WebSocket");wrap("EventSource");
+try{const f=window.fetch;if(f)window.fetch=function(i,o){try{const u=new URL(typeof i=="string"?i:(i&&i.url)||String(i),location.href);if(u.origin==location.origin&&u.pathname.startsWith("/api/"))apiAt=Date.now()}catch(e){}return f.apply(this,arguments)}}catch(e){}
+function online(){try{if(typeof window.tabBusy=="function"&&window.tabBusy())return!0}catch(e){}
+ if(Date.now()-apiAt<45e3)return!0;
+ for(const x of live){try{if("readyState"in x&&typeof x.readyState=="number"){if(x.readyState<2)return!0;continue}
+  const c=x.connectionState||x.iceConnectionState;if(c=="connected"||c=="connecting"||c=="checking"||c=="completed")return!0}catch(e){}}return!1}
+const SAFE=/^(התחל|התחילו|התחלה|התחל משחק|משחק חדש|שחק|שחקו|שחק עכשיו|בואו נשחק|יאללה|נסה שוב|נסי שוב|נסו שוב|שחק שוב|שחקו שוב|עוד פעם|עוד סיבוב|משחק חוזר|סיבוב חדש|חזרה לתפריט|חזור לתפריט|לתפריט|תפריט|תפריט ראשי|מסך ראשי|play|start|play again|retry|new game|main menu)$/i;
+function norm(t){return(t||"").replace(/[\u{1F000}-\u{1FFFF}\u2600-\u27BF\uFE0F\u25B6\u25C0\u2190-\u21FF\u200f\u200e]/gu,"").replace(/[!.…:،,]/g," ").replace(/\s+/g," ").trim()}
+function vis(e){if(!e.getClientRects().length)return!1;if(e.checkVisibility&&!e.checkVisibility({opacityProperty:!0,visibilityProperty:!0}))return!1;
+ const r=e.getBoundingClientRect();if(r.width*r.height<600||r.bottom<0||r.top>innerHeight||r.right<0||r.left>innerWidth)return!1;
+ const x=Math.min(Math.max(r.left+r.width/2,0),innerWidth-1),y=Math.min(Math.max(r.top+r.height/2,0),innerHeight-1),h=d.elementFromPoint(x,y);return!!h&&(h==e||e.contains(h)||h.contains(e))}
+function safe(){try{if(typeof window.tabSafeToUpdate=="function")return!!window.tabSafeToUpdate()}catch(e){}
+ for(const e of d.querySelectorAll("button,[role=button],a,.btn,.button,[onclick]")){if(e.closest(".tu-p,.tu-c,.tau-t"))continue;const t=norm(e.textContent);if(t.length<2||t.length>24||!SAFE.test(t))continue;if(vis(e))return!0}return!1}
+const boot=()=>!nIn&&Date.now()-T0<2e4;
+const why=()=>pend?(boot()?"open":(!online()&&Date.now()-lastIn>3e3&&d.visibilityState=="visible"&&safe())?"menu":""):"";
+function guard(){try{const g=JSON.parse(sessionStorage.getItem("tab.autoupd")||"null");return g&&g.from==B&&Date.now()-g.at<6e5}catch(e){return!1}}
+async function check(){if(!N.onLine||applied)return;lastChk=Date.now();let j=null;
+ for(const m of["GET","POST"]){try{const r=await fetch("/__upd.json?t="+Date.now(),{cache:"no-store",method:m});if(r.ok){j=await r.json();break}}catch(e){}}
+ if(!j||!j.b||j.b==B){pend=null;return}pend=j;if(guard())return;tick()}
+function tick(){clearTimeout(timer);if(!pend||applied||guard())return;const w=why();if(w)return apply(w);timer=setTimeout(tick,2e3)}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function apply(w){if(applied)return;applied=!0;const to=pend;
+ try{sessionStorage.setItem("tab.autoupd",JSON.stringify({from:B,to:to.b,v:to.v,at:Date.now(),why:w}))}catch(e){}
+ let ok=!1;
+ try{const sw=N.serviceWorker,r=sw&&await sw.getRegistration();
+  if(r){try{await r.update()}catch(e){}
+   for(let i=0;i<80;i++){const x=r.installing||r.waiting;if(!x)break;if(r.waiting){for(const m of[{type:"SKIP_WAITING"},"SKIP_WAITING","skipWaiting",{t:"skip"},{action:"skipWaiting"}])try{r.waiting.postMessage(m)}catch(e){}}await sleep(250)}}
+  const t=await(await fetch(location.pathname,{cache:"no-store"})).text();ok=t.indexOf('data-b="'+to.b+'"')>=0}catch(e){}
+ if(!ok){try{for(const r of await N.serviceWorker.getRegistrations())await r.unregister()}catch(e){}try{for(const k of await caches.keys())await caches.delete(k)}catch(e){}}
+ location.reload()}
+function toast(){let g=null;try{g=JSON.parse(sessionStorage.getItem("tab.autoupd")||"null")}catch(e){}if(!g||g.to!=B||g.shown)return;
+ try{g.shown=1;sessionStorage.setItem("tab.autoupd",JSON.stringify(g))}catch(e){}
+ const e=d.createElement("div");e.className="tau-t";e.textContent="✓ עודכן לגרסה "+(V||g.v||"");
+ e.style.cssText="position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483646;background:#1c2a1ce6;color:#fff;font:600 14px/1.4 system-ui,sans-serif;padding:7px 14px;border-radius:999px;pointer-events:none;direction:rtl;transition:opacity .6s";
+ d.body.appendChild(e);setTimeout(()=>{e.style.opacity="0";setTimeout(()=>e.remove(),700)},2600)}
+const inp=()=>{lastIn=Date.now();nIn++};["pointerdown","keydown","touchstart","wheel"].forEach(t=>addEventListener(t,inp,{capture:!0,passive:!0}));
+addEventListener("online",()=>check());
+d.addEventListener("visibilitychange",()=>{if(d.visibilityState=="hidden"){hiddenAt=Date.now();return}if(Date.now()-lastChk>6e4)check();else tick()});
+setInterval(()=>{if(d.visibilityState=="visible"&&Date.now()-lastChk>=PERIOD-1e3)check()},3e4);
+const reg=()=>{try{if(D.sw&&N.serviceWorker&&window.isSecureContext)N.serviceWorker.getRegistration("/").then(r=>{if(!r)return N.serviceWorker.register(D.sw,{scope:"/"})}).catch(()=>{})}catch(e){}};
+const go=()=>{toast();setTimeout(reg,800);setTimeout(check,1200)};d.body?go():d.addEventListener("DOMContentLoaded",go);
+window.TabAutoUpdate={b:B,v:V,check,apply:()=>pend&&apply("api"),get pending(){return pend},get reason(){return why()},safe,online};
+})();
+</script>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="robots" content="noindex,nofollow">
+<meta name="game-id" content="hamitchaze">
+<meta name="theme-color" content="#14121F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>המתחזה בחללית</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="shell.css?v=1.0.4">
+
+<script>window.GAME_VERSION='1.0.5-turn1';window.GAME_SLUG='hamitchaze';</script>
+</head>
+<body>
+<section id="menu" class="screen on" aria-hidden="false">
+  <div class="logo"><canvas id="logo" aria-hidden="true"></canvas></div>
+  <h1>המתחזה בחללית</h1>
+  <p class="sub">משימות, הצבעות ומתחזה אחד בינינו</p>
+  <div class="col">
+    <button id="bCont" class="btn main" style="display:none">▶ המשך מאיפה שעצרת</button>
+    <div id="modes" class="col"></div>
+    <div class="row"><button id="bHow" class="btn">❓ איך משחקים</button><button id="bSet" class="btn">⚙️ הגדרות</button></div>
+    <div id="best" class="best"></div>
+  </div>
+</section>
+<section id="game" class="screen" aria-hidden="true" inert>
+  <canvas id="cv"></canvas>
+  <div id="hud"></div>
+  <button id="bPause" class="ib" aria-label="השהיה">⏸</button>
+  <button id="bMute" class="ib" aria-label="צליל">🔊</button>
+  
+</section>
+<div id="sheetPause" class="sheet" aria-hidden="true" inert><div class="card">
+  <h2>השהיה</h2>
+  <button id="bResume" class="btn main">▶ המשך</button>
+  <button id="bRestart" class="btn">↻ התחלה מחדש</button>
+  <button id="bQuit" class="btn">🏠 לתפריט</button>
+  <div data-tab-upd></div>
+</div></div>
+<div id="sheetSet" class="sheet" aria-hidden="true" inert><div class="card">
+  <h2>הגדרות</h2>
+  <div class="tog"><span>צלילים</span><button id="bSnd" class="btn">פועל</button></div>
+  <div class="tog"><span>רטט</span><button id="bVib" class="btn">פועל</button></div>
+  <button id="bReset" class="btn hot">איפוס התקדמות</button>
+  <div data-tab-upd></div>
+  <button id="bSetX" class="btn main">סגירה</button>
+</div></div>
+<div id="sheetHow" class="sheet" aria-hidden="true" inert><div class="card">
+  <h2>איך משחקים</h2>
+  <div id="howBody"></div>
+  <button id="bHowX" class="btn main">הבנתי</button>
+</div></div>
+<div id="sheetEnd" class="sheet" aria-hidden="true" inert><div class="card">
+  <h2 id="endT">נגמר</h2>
+  <div id="endStars" class="stars"></div>
+  <div id="endStats" class="stats"></div>
+  <button id="bNext" class="btn main">▶ לשלב הבא</button>
+  <div class="row"><button id="bAgain" class="btn alt">↻ שוב</button><button id="bMenu" class="btn">🏠 תפריט</button></div>
+</div></div>
+<script src="vendor/peerjs.min.js?v=1.0.4"></script>
+<script src="ice.js?v=1.0.4"></script>
+<script src="net.js?v=1.0.4"></script>
+<script src="tabname.js?v=1.0.4"></script>
+<script src="shell.js?v=1.0.4"></script>
+<script src="core.js?v=1.0.4"></script>
+<script src="game.js?v=1.0.4"></script>
+<script data-tab-upd-mod data-b="a3f637e0efee" data-v="1.0.4" data-pos="bl">(()=>{if(window.TabUpdate)return;const d=document,N=navigator,S=d.currentScript,D=S?S.dataset:{},B=D.b||"",V=D.v||B,P=D.pos||"tl",I="🔄",L=[];const T=["בודק גרסה…","הגרסה עדכנית","יש גרסה חדשה","אין חיבור לרשת","לא ניתן לבדוק כרגע","עדכון עכשיו","סגירה","עדכון","השמירות נשמרות"];let s=-1,n="",p=null;const E=(t,c,h)=>{const e=d.createElement(t);e.className=c;e.innerHTML=h;return e},A=(e,t,f,o)=>e.addEventListener(t,f,o),$=(e,q)=>e.querySelector(q);function W(){L.forEach(b=>b.classList.toggle("tu-n",s==2));if(p)$(p,"p").textContent=s<1?T[0]:s==1?T[1]+" (v"+V+")":s==2?T[2]+(n?" (v"+n+")":""):T[s]}async function K(){s=N.onLine?0:3;W();if(s)return s;try{const j=await(await fetch("/__upd.json?t="+Date.now(),{cache:"no-store",method:D.m||"POST"})).json();if(!j.b)throw 0;n=j.v||j.b;s=j.b==B?1:2}catch(e){s=N.onLine?4:3}W();return s}async function G(){try{for(const r of await N.serviceWorker.getRegistrations())await r.unregister()}catch(e){}try{for(const k of await caches.keys())await caches.delete(k)}catch(e){}const l=new URL(location.href);l.searchParams.set("v",Date.now());location.replace(l.href)}function X(){p&&p.remove();p=null}function O(e){e&&e.stopPropagation();if(p)return;p=E("div","tu-p","<b>"+I+" "+T[7]+"</b><p></p><button class=tu-u>"+T[5]+"</button><button class=tu-x>"+T[6]+"</button><small>"+T[8]+"</small>");$(p,".tu-u").onclick=G;$(p,".tu-x").onclick=X;["pointerdown","keydown","click"].forEach(t=>A(p,t,x=>x.stopPropagation()));d.body.appendChild(p);W();K()}function U(c,h,el){const b=E("button",c,I+h+"<i class=tu-d></i>");b.type="button";b.onclick=O;el.appendChild(b);L.push(b);W();return b}function M(el){if(!el||$(el,".tu-b"))return;const b=U("tu-b tu-0"," "+T[7],el),c=[...el.querySelectorAll("button")].find(x=>x!=b&&x.className);if(c)b.className=c.className.replace(/\b(active|on|sel\w*|checked|current|primary|hidden)\b/g,"")+" tu-b"}function F(){d.querySelectorAll("[data-tab-upd]").forEach(M);for(const h of d.querySelectorAll("h1,h2,h3,h4,legend,[class*=title]")){const t=h.textContent;if(t.length>40||!/הגדרות|אפשרויות|השהיה/.test(t)||h.closest(".tu-p")||!h.getClientRects().length)continue;for(let q=h.parentElement,i=0;q&&i<4&&q!=d.body;i++,q=q.parentElement){if($(q,".tu-b"))break;if(q.querySelectorAll("button,input,select").length>1){M(q);break}}}}function C(){const b=U("tu-c","",d.body),k=["pointerdown","keydown"],h=e=>{const t=e.target;if(t.closest&&t.closest(".tu-c,.tu-p,.tu-b"))return;b.remove();k.forEach(t=>removeEventListener(t,h,!0))};[P[0]=="b"?"bottom":"top",P[1]=="r"?"right":"left"].forEach(k=>b.style.setProperty(k,"calc(6px + env(safe-area-inset-"+k+"))"));k.forEach(t=>A(window,t,h,!0))}function Z(){const R=/([?&])v=\d{13}&?/;R.test(location.search)&&history.replaceState(history.state,"",location.href.replace(R,"$1").replace(/[?&](?=#|$)/,""));d.head.appendChild(E("style","",".tu-c,.tu-p{all:unset;position:fixed;z-index:2147483647;color:#fff;text-align:center;font:17px/34px sans-serif}.tu-c{width:34px;height:34px;border-radius:50%;background:#0009}.tu-b{position:relative}.tu-0{font:inherit;display:block;margin:9px auto 0;padding:8px 16px;border-radius:9px;background:#8883;color:inherit}.tu-d{position:absolute;top:0;right:0;width:10px;height:10px;border-radius:50%;background:#f33;display:none}.tu-n .tu-d{display:block}.tu-p{left:50%;top:50%;transform:translate(-50%,-50%);width:260px;max-width:88vw;background:#223;border-radius:14px;padding:16px;font:15px/1.5 sans-serif;direction:rtl}.tu-p button{all:unset;margin:4px;padding:8px 14px;border-radius:9px;background:#27e}.tu-p .tu-x{background:#456}.tu-p small{display:block;opacity:.7;font-size:12px}"));if(D.corner!="0")C();F();let m=0;new MutationObserver(()=>{m=m||setTimeout(()=>{m=0;F()},600)}).observe(d.body,{childList:!0,subtree:!0,attributes:!0,attributeFilter:["class","style","hidden"]});setTimeout(()=>N.onLine&&K(),1200)}window.TabUpdate={b:B,v:V,check:K,update:G,open:O,mount:M,get state(){return s}};d.body?Z():A(d,"DOMContentLoaded",Z)})();</script></body>
+</html>
