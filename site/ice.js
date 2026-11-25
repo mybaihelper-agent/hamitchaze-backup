@@ -5,8 +5,8 @@ window.TABICE = {
   ],
   failMs: 12000,
   regMs: 8000,
-  // TURN relay fallback (test build 1.0.4-turn1): short-lived credentials are
+  // TURN relay fallback (auto since 1.0.6): short-lived credentials are
   // issued by the same-origin /ice function; the Metered secret key never
-  // reaches the client. Offered only after repeated direct-connection failure.
+  // reaches the client. Automatic after 2 failed direct attempts (Ron 25.11: no user action); 503 warming is retried after readyIn.
   relayEndpoint: '/ice'
 };

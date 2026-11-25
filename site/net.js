@@ -15,14 +15,18 @@
     if (FORCE_RELAY) config.iceTransportPolicy = 'relay';
     return { debug: 0, config };
   }
+  let lastWarmWait = 0; // seconds the server asked us to wait while its credential pool warms (503)
   async function fetchRelay() {
     if (!ICE.relayEndpoint) return false;
     try {
       const r = await fetch(ICE.relayEndpoint, { headers: { Accept: 'application/json' } });
-      if (!r || !r.ok) return false;
+      if (!r || !r.ok) {
+        if (r && r.status === 503) { try { const e = await r.json(); lastWarmWait = (e && +e.readyIn) || 30; } catch (x) { lastWarmWait = 30; } } else lastWarmWait = 0;
+        return false;
+      }
       const j = await r.json();
       if (!j || !Array.isArray(j.iceServers) || !j.iceServers.length) return false;
-      RELAY_SERVERS = j.iceServers;
+      RELAY_SERVERS = j.iceServers; lastWarmWait = 0;
       return true;
     } catch (e) { return false; }
   }
@@ -241,7 +245,7 @@
     connect();
     return G;
   }
-  return { newRoom, roomLink, roomFromHash, pendingRoom, clearPending, normRoom, PID, cidFor, host, join, VER, NS, LEN, hasPeerLib, fetchRelay, relayActive: () => !!RELAY_SERVERS, forceRelay: FORCE_RELAY, iceLimit: () => (RELAY_SERVERS ? 10 : ICE_STRIKES) };
+  return { newRoom, roomLink, roomFromHash, pendingRoom, clearPending, normRoom, PID, cidFor, host, join, VER, NS, LEN, hasPeerLib, fetchRelay, relayActive: () => !!RELAY_SERVERS, warmingWait: () => lastWarmWait, forceRelay: FORCE_RELAY, iceLimit: () => (RELAY_SERVERS ? 10 : ICE_STRIKES) };
   }
   window.OnlineNet = { make, hasPeerLib };
 })();

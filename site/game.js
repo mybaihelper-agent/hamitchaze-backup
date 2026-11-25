@@ -489,7 +489,7 @@ function renderLobby() {
   b.innerHTML = '<button class="x" id="lbX" aria-label="יציאה">✕</button><h2>🌐 ' + (N.role === 'host' ? 'החדר שלך' : 'נכנסת לחדר') + '</h2>' +
     (N.code ? '<div class="lb-code">' + N.code + '</div>' : '') + '<div class="lb-st">' + (N.st || '') + '</div>' +
     '<div class="lb-pl">' + pls.map(p => '<span>' + String(p.name).replace(/[<>&]/g, '') + '</span>').join('') + (N.role === 'host' && N.dialing > 0 ? '<span style="background:#FFE07A">⏳ מישהו מתחבר…</span>' : '') + '</div>' +
-    (N.role === 'host' ? '<p>שלחו לחברים את הקישור: הם נכנסים ישר לחדר. בוטים ימלאו עד 6 שחקנים.<br><small>מי שמצטרף מרשת חסומה עלול להופיע רק אחרי דקה-שתיים — זה תקין.</small></p><button class="bb alt" id="lbCopy">🔗 העתק קישור</button>' + (navigator.share ? '<button class="bb alt" id="lbShare">📤 שיתוף</button>' : '') + '<br><button class="bb" id="lbGo">▶ התחל סבב</button>' : '<p>המארח/ת יתחיל/תתחיל את הסבב בקרוב.</p><button class="bb alt" id="lbName">✏️ שינוי שם</button><button class="bb alt" id="lbSolo">🤖 שחק מול בוטים</button>' + (N.relayOffer ? '<button class="bb" id="lbRelay">🛰️ נסה חיבור דרך ממסר (ניסיוני)</button>' : ''));
+    (N.role === 'host' ? '<p>שלחו לחברים את הקישור: הם נכנסים ישר לחדר. בוטים ימלאו עד 6 שחקנים.<br><small>מי שמצטרף מרשת חסומה עלול להופיע רק אחרי דקה-שתיים — זה תקין.</small></p><button class="bb alt" id="lbCopy">🔗 העתק קישור</button>' + (navigator.share ? '<button class="bb alt" id="lbShare">📤 שיתוף</button>' : '') + '<br><button class="bb" id="lbGo">▶ התחל סבב</button>' : '<p>המארח/ת יתחיל/תתחיל את הסבב בקרוב.</p><button class="bb alt" id="lbName">✏️ שינוי שם</button><button class="bb alt" id="lbSolo">🤖 שחק מול בוטים</button>');
   b.querySelector('#lbX').onclick = leaveOnline;
   const q = id => b.querySelector(id);
   if (q('#lbCopy')) q('#lbCopy').onclick = () => { try { navigator.clipboard.writeText(link); S.toast('הקישור הועתק'); } catch (e) { S.toast(link); } };
@@ -497,12 +497,7 @@ function renderLobby() {
   if (q('#lbGo')) q('#lbGo').onclick = () => { A.click(); S.debug.start('online'); };
   if (q('#lbName')) q('#lbName').onclick = () => askName();
   if (q('#lbSolo')) q('#lbSolo').onclick = () => { leaveOnline(); S.debug.start('rnd'); };
-  if (q('#lbRelay')) q('#lbRelay').onclick = async () => {
-    N.relayOffer = false; setLobbyStatus('מתחבר דרך ממסר…');
-    const ok = await NET.fetchRelay();
-    if (!ok) { setLobbyStatus('הממסר לא זמין כרגע. אפשר לשחק מול בוטים.'); return; }
-    if (N.G && N.G.retryNow) N.G.retryNow(true);
-  };
+
 }
 function hostSend(cid, m) { if (N.H) N.H.send(cid, m); }
 function lobbyCast() { const list = [{ name: myName() + ' (מארח/ת)' }].concat(N.lobby.filter(x => x.on).map(x => ({ name: x.name }))); N.lobby.forEach(x => x.on && hostSend(x.cid, { t: 'lobby', list, code: N.code, playing: N.playing })); }
@@ -529,8 +524,24 @@ function openHost() {
   });
 }
 function askName() { if (!window.TabName) return; N.named = true; TabName.prompt({ ns: NS, onName(n) { if (N.G) N.G.rename(n); renderLobby(); } }); }
+let relayAutoTries = 0;
+async function autoRelay() {
+  if (!NET || !NET.fetchRelay || (NET.relayActive && NET.relayActive())) return;
+  setLobbyStatus('החיבור הישיר נכשל — מחבר אוטומטית דרך ממסר…');
+  const ok = await NET.fetchRelay();
+  if (ok) { relayAutoTries = 0; setLobbyStatus('מתחבר דרך ממסר…'); if (N.G && N.G.retryNow) N.G.retryNow(true); return; }
+  const wait = (NET.warmingWait && NET.warmingWait()) || 0;
+  if (wait > 0 && relayAutoTries < 6 && N.role === 'guest') {
+    relayAutoTries++;
+    setLobbyStatus('הממסר מתחמם, מנסה שוב בעוד כ-' + wait + ' שניות…');
+    setTimeout(() => { if (N.role === 'guest' && NET && !(NET.relayActive && NET.relayActive())) autoRelay(); }, wait * 1000);
+  } else {
+    setLobbyStatus('הממסר לא זמין כרגע. אפשר לשחק מול בוטים או לנסות שוב מאוחר יותר.');
+  }
+}
 function joinRoom(code) {
   if (!NET || !code) return;
+  relayAutoTries = 0;
   N.role = 'guest'; N.code = code; N.glist = []; lobby.hidden = false; setLobbyStatus('מצטרף לחדר ' + code + '…');
   const cid = NET.cidFor(code);
   N.G = NET.join(code, cid, myName(), {
@@ -545,10 +556,8 @@ function joinRoom(code) {
     onNoHost() { setLobbyStatus('מחפש את המארח… (ודאו שהחדר עדיין פתוח)'); },
     onNoBroker() { setLobbyStatus('השרת המתווך לא עונה, מנסה שוב…'); },
     onFail(state) {
-      if (state === 'final' && NET && NET.fetchRelay && !NET.relayActive()) {
-        N.relayOffer = true;
-        setLobbyStatus('החיבור הישיר נכשל — כנראה שהרשת חוסמת (סלולר או Wi‑Fi מוגבל). אפשר לנסות חיבור דרך ממסר (ניסיוני):');
-      } else if (NET && NET.relayActive && NET.relayActive()) setLobbyStatus('מתחבר דרך ממסר…');
+      if (state === 'final' && NET && NET.fetchRelay && !(NET.relayActive && NET.relayActive())) autoRelay();
+      else if (NET && NET.relayActive && NET.relayActive()) setLobbyStatus('מתחבר דרך ממסר…');
       else setLobbyStatus('מנסה שוב להתחבר…');
     },
     onVer() { setLobbyStatus('הגרסה שלך שונה מהמארח. רעננו את הדף.'); }

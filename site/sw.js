@@ -6,7 +6,7 @@
      If the network page is a different version than this worker (a new release), everything is fetched from the network
      until the new worker takes over, so a new page never runs with old scripts. Other files: this version's cache first.
    - never touches localStorage / IndexedDB (saves). /__* (gate), /api/*, Range requests and other origins pass through. */
-const APP = "hamitchaze", VERSION = "1.0.5-turn1", CACHE = APP + "-v" + VERSION;
+const APP = "hamitchaze", VERSION = "1.0.6-auto", CACHE = APP + "-v" + VERSION;
 const PRECACHE = ["./", "core.js", "game.js", "ice.js", "index.html", "manifest.webmanifest", "net.js", "shell.css", "shell.js", "tabname.js"];
 const OPTIONAL = ["fonts/heebo-he.woff2", "fonts/heebo-la.woff2", "fonts/secular-he.woff2", "fonts/secular-la.woff2", "icon-192.png", "icon-512.png", "icon.svg", "vendor/peerjs.min.js"];
 const NET_MS = 4000;
