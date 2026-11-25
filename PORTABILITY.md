@@ -11,6 +11,7 @@
 ## העברה לאחסון סטטי אחר (Netlify / Vercel / GitHub Pages / S3)
 מעלים את `site/` כמות שהיא (בלי `functions/` — היא ספציפית ל-Cloudflare). המשחק עובד מלא, כולל חדרים מקוונים; רק הממסר לא פעיל עד שמעבירים גם את `/ice`.
 **נבדק 25.11:** שחזור מלא מה-zip לפרויקט Cloudflare נפרד לקח ~2 דקות ועבר בדיקת /ice.
+**נבדק 25.11 (ספק עצמאי):** אותה תיקיית `site/` עלתה ל-GitHub Pages ומשחקת: https://mybaihelper-agent.github.io/hamitchaze-backup/site/ (P2P מלא; בלי /ice, כלומר בלי ממסר). המקור + המסמך הזה: https://github.com/mybaihelper-agent/hamitchaze-backup
 
 ## העברת `/ice`
 - **Cloudflare Pages אחר:** פרויקט חדש → משתנה סביבה `METERED_SECRET` → `wrangler pages deploy`. זה הכול (נבדק).
@@ -29,3 +30,4 @@
 ## מיקום נוכחי
 - ראשי: https://hamitchaze-ron.pages.dev (Cloudflare Pages, חשבון ראשי, פרויקט `hamitchaze-ron`)
 - גיבוי/בדיקות: https://hamitchaze-turn-test.pages.dev (אותו חשבון, נבנה מחדש מאותו zip ב-25.11)
+- גיבוי בספק עצמאי: https://mybaihelper-agent.github.io/hamitchaze-backup/site/ (GitHub Pages, סטטי בלבד; בלי ממסר)
